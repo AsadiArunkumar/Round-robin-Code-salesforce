@@ -1,0 +1,104 @@
+trigger RoundRobin_opp on Opportunity (before insert) {
+    
+    // record type ids
+    id Quotation = Schema.SObjectType.Opportunity.getRecordTypeInfosByName().get('Quotation').getRecordTypeId();
+    id PartsAndAccessoriesSales = Schema.SObjectType.Opportunity.getRecordTypeInfosByName().get('Parts and Accessories Sales').getRecordTypeId();
+    id RetailServiceSales = Schema.SObjectType.Opportunity.getRecordTypeInfosByName().get('Retail Service Sales').getRecordTypeId();
+    id UsedVehicleSales = Schema.SObjectType.Opportunity.getRecordTypeInfosByName().get('Used Vehicle Sales').getRecordTypeId();
+    
+    // All group users with group name
+    List<GroupMember> list_of_all_group_members = [select Group.Name, UserOrGroupId from GroupMember where Group.Name in('Quotation Public Group','Parts and Accessories Sales Public Group','Retail Service Sales Public Group','Used Vehicle Sales Public Group')];
+    
+    // seperatation of group users
+    List<GroupMember> Quotation_member = new List<GroupMember>();
+    List<GroupMember> Parts_and_Accessories_Sales_member = new List<GroupMember>();
+    List<GroupMember> Retail_Service_Sales_member = new List<GroupMember>();
+    List<GroupMember> Used_Vehicle_Sales_member = new List<GroupMember>();
+    for(GroupMember foreachmem : list_of_all_group_members){
+        if(foreachmem.Group.Name == 'Quotation Public Group'){
+            Quotation_member.add(foreachmem);
+        }else if(foreachmem.Group.Name == 'Parts and Accessories Sales Public Group'){
+            Parts_and_Accessories_Sales_member.add(foreachmem);
+        }
+        else if(foreachmem.Group.Name == 'Retail Service Sales Public Group'){
+            Retail_Service_Sales_member.add(foreachmem);
+        }
+        else if(foreachmem.Group.Name == 'Used Vehicle Sales Public Group'){
+            Used_Vehicle_Sales_member.add(foreachmem);
+        }
+    }    
+       
+    /*
+    Map<String, test_RR__mdt> testMDT = test_RR__mdt.getAll();
+    for(String tt : testMDT.keySet()){
+        q = testMDT.get(tt).Quotation__c;
+    }
+    */
+    Decimal Quotation_index;
+    Decimal RetailServiceSalesIndex;
+    Decimal PartsAndAccessoriesSalesIndex;
+    Decimal UsedVehicleSalesindex;
+    
+    //memory 
+    List<RoundRobinOpportunity__c> RR_OPP = [select id,Used_Vehicle_Sales_index__c,Retail_Service_Sales_index__c,Quotation__c,Parts_and_Accessories_Sales_index__c from RoundRobinOpportunity__c ];
+    for(RoundRobinOpportunity__c RR : RR_OPP){
+        Quotation_index = RR.Quotation__c;
+        UsedVehicleSalesindex = RR.Used_Vehicle_Sales_index__c;
+        RetailServiceSalesIndex = RR.Retail_Service_Sales_index__c;
+        PartsAndAccessoriesSalesIndex = RR.Parts_and_Accessories_Sales_index__c;
+    }
+    
+    
+    for(Opportunity foreachOpp: trigger.new){
+        
+        //Quotation
+        if(foreachOpp.RecordTypeId == Quotation){          
+            if(Quotation_member.size()  == Quotation_index){
+                Quotation_index = 0;
+            }
+            foreachOpp.OwnerId = Quotation_member[Integer.valueOf(Quotation_index)].UserOrGroupId;
+            Quotation_index++;
+        }
+        
+        // Parts And Accessories Sales
+		else if(foreachOpp.RecordTypeId == PartsAndAccessoriesSales){
+            if(Parts_and_Accessories_Sales_member.size()  == PartsAndAccessoriesSalesIndex){
+                PartsAndAccessoriesSalesIndex = 0;
+            }
+            foreachOpp.OwnerId = Parts_and_Accessories_Sales_member[Integer.valueOf(PartsAndAccessoriesSalesIndex)].UserOrGroupId;
+            PartsAndAccessoriesSalesIndex++;   
+        }
+        
+        //Retail Service Sales
+        else if(foreachOpp.RecordTypeId == RetailServiceSales){
+            if(Retail_Service_Sales_member.size()  == RetailServiceSalesIndex){
+                RetailServiceSalesIndex = 0;
+            }
+            foreachOpp.OwnerId = Retail_Service_Sales_member[Integer.valueOf(RetailServiceSalesIndex)].UserOrGroupId;
+            RetailServiceSalesIndex++;
+        }
+        
+        //Used Vehicle Sales
+        else if(foreachOpp.RecordTypeId == UsedVehicleSales){
+            if(Used_Vehicle_Sales_member.size()  == UsedVehicleSalesindex){
+                UsedVehicleSalesindex = 0;
+            }
+            foreachOpp.OwnerId = Used_Vehicle_Sales_member[Integer.valueOf(UsedVehicleSalesindex)].UserOrGroupId;
+            UsedVehicleSalesindex++;
+        }    
+    }
+    
+    
+    // updating the custom object records to monitor the count
+   	List<RoundRobinOpportunity__c> update_RR_OPP = new  List<RoundRobinOpportunity__c>();
+    for(RoundRobinOpportunity__c RR : RR_OPP){
+        RR.Quotation__c = Quotation_index;
+        RR.Used_Vehicle_Sales_index__c =  UsedVehicleSalesindex;
+        RR.Retail_Service_Sales_index__c = RetailServiceSalesIndex;
+        RR.Parts_and_Accessories_Sales_index__c = PartsAndAccessoriesSalesIndex;
+        update_RR_OPP.add(RR);
+    }
+    update update_RR_OPP;
+    
+   
+}
